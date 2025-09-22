@@ -1,4 +1,4 @@
-# audiry
+# Music App
 
 A new Flutter project.
 
