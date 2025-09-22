@@ -1,0 +1,209 @@
+// lib/screens/home_screen.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/idea.dart';
+import '../main.dart';
+import '../widgets/animated_bg.dart';
+
+class HomeScreen extends StatefulWidget {
+  final void Function(Idea) onIdeaSaved;
+  const HomeScreen({super.key, required this.onIdeaSaved});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final FlutterSoundRecorder _rec = FlutterSoundRecorder();
+
+  bool _recording = false;
+  DateTime? _startedAt;
+  Timer? _timer;
+  int _elapsedMs = 0;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _rec.closeRecorder();
+    super.dispose();
+  }
+
+  // quick helper to surface issues
+  void _toast(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  Future<void> _start() async {
+    try {
+      print('[REC] start tapped');
+
+      // 1) Request mic permission just-in-time
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted) {
+        _toast('Microphone permission required');
+        print('[REC] mic permission not granted');
+        return;
+      }
+
+      // 2) Open recorder right before use
+      if (!_rec.isRecording && !_rec.isPaused) {
+        await _rec.openRecorder();
+        print('[REC] recorder opened');
+      }
+
+      // 3) Build a file path
+      final dir = await getApplicationDocumentsDirectory();
+      final filePath =
+          '${dir.path}/idea_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      // 4) Start recording (AAC in MP4, 48kHz mono)
+      await _rec.startRecorder(
+        toFile: filePath,
+        codec: Codec.aacMP4,
+        sampleRate: 48000,
+        bitRate: 96000,
+        numChannels: 1,
+      );
+      print('[REC] started -> $filePath');
+
+      setState(() {
+        _recording = true;
+        _startedAt = DateTime.now();
+        _elapsedMs = 0;
+      });
+
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted || _startedAt == null) return;
+        setState(() =>
+        _elapsedMs = DateTime.now().difference(_startedAt!).inMilliseconds);
+      });
+    } catch (e) {
+      print('[REC] start error: $e');
+      _toast('Recorder error: $e');
+    }
+  }
+
+  Future<void> _stop() async {
+    try {
+      print('[REC] stop tapped');
+      final path = await _rec.stopRecorder(); // String? path
+      await _rec.closeRecorder();
+
+      _timer?.cancel();
+      setState(() => _recording = false);
+
+      if (path == null) {
+        print('[REC] stop returned null path');
+        return;
+      }
+
+      print('[REC] saved at: $path');
+      final duration = Duration(milliseconds: _elapsedMs);
+
+      final idea = Idea(
+        id: const Uuid().v4(),
+        title:
+        'Idea ${DateTime.now().toLocal().toIso8601String().substring(0, 16)}',
+        filePath: path, // iOS: absolute path
+        duration: duration,
+        createdAt: DateTime.now(),
+      );
+
+      IdeaStashApp.of(context).addIdea(idea);
+      if (!mounted) return;
+      Navigator.pushNamed(context, '/refine', arguments: idea);
+    } catch (e) {
+      print('[REC] stop error: $e');
+      _toast('Stop error: $e');
+    }
+  }
+
+  String _format(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = Duration(milliseconds: _elapsedMs);
+
+    return Scaffold(
+      body: AnimatedBg(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              const Align(
+                alignment: Alignment(0, -0.85),
+                child: Text(
+                  'What are you thinking?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              if (_recording)
+                Align(
+                  alignment: const Alignment(0, -0.65),
+                  child: Text(
+                    _format(elapsed),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              // Recordings nav
+              Positioned(
+                right: 16,
+                top: 16,
+                child: FilledButton.tonal(
+                  onPressed: () => Navigator.pushNamed(context, '/recordings'),
+                  child: const Text('Recordings'),
+                ),
+              ),
+              // Big record button (always tappable)
+              Align(
+                alignment: const Alignment(0, 0.85),
+                child: GestureDetector(
+                  onTap: _recording ? _stop : _start,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 96,
+                    width: 96,
+                    decoration: BoxDecoration(
+                      color: _recording ? Colors.redAccent : Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                          color: Colors.black26,
+                          offset: Offset(0, 6),
+                        )
+                      ],
+                    ),
+                    child: Icon(
+                      _recording ? Icons.stop_rounded : Icons.mic_rounded,
+                      size: 38,
+                      color: _recording ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
