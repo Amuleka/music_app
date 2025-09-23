@@ -1,5 +1,6 @@
 // lib/screens/home_screen.dart
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -9,12 +10,13 @@ import 'package:uuid/uuid.dart';
 import '../models/idea.dart';
 import '../main.dart';
 import '../widgets/animated_bg.dart';
+import '../native/ios_recorder.dart'; // <-- MethodChannel helpers (startNativeRecord/stopNativeRecord)
 
-/// Ask for mic permission safely. If previously denied permanently, opens Settings.
+/// Ask for mic permission safely (Android/others). iOS uses native system prompt on the Swift side.
 Future<bool> ensureMicPermission(BuildContext context) async {
+  if (Platform.isIOS) return true; // handled natively
   var status = await Permission.microphone.status;
 
-  // If user denied before with "Don't ask again", send them to Settings
   if (status.isPermanentlyDenied) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Enable Microphone in Settings to record')),
@@ -23,7 +25,6 @@ Future<bool> ensureMicPermission(BuildContext context) async {
     return false;
   }
 
-  // Request now if not granted
   status = await Permission.microphone.request();
   if (!status.isGranted) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -43,6 +44,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Used for Android (FlutterSound). iOS uses native Swift via MethodChannel.
   final FlutterSoundRecorder _rec = FlutterSoundRecorder();
 
   bool _recording = false;
@@ -53,11 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    // Safe to close; no-op on iOS path
     _rec.closeRecorder();
     super.dispose();
   }
 
-  // quick helper to surface issues
   void _toast(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
@@ -65,34 +67,42 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       print('[REC] start tapped');
 
-      // 1) Ask for mic permission via helper
-      final ok = await ensureMicPermission(context);
-      if (!ok) {
-        print('[REC] mic permission not granted');
-        return;
+      // iOS → call native recorder (system mic prompt handled in Swift)
+      if (Platform.isIOS) {
+        final ok = await startNativeRecord();
+        if (ok != true) {
+          _toast('Could not start recorder');
+          return;
+        }
+        print('[REC][iOS] native recorder started');
+      } else {
+        // Android/others → FlutterSound with runtime permission
+        final permOk = await ensureMicPermission(context);
+        if (!permOk) {
+          print('[REC][Android] mic permission not granted');
+          return;
+        }
+
+        if (!_rec.isRecording && !_rec.isPaused) {
+          await _rec.openRecorder();
+          print('[REC][Android] recorder opened');
+        }
+
+        final dir = await getApplicationDocumentsDirectory();
+        final filePath =
+            '${dir.path}/idea_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+        await _rec.startRecorder(
+          toFile: filePath,
+          codec: Codec.aacMP4,
+          sampleRate: 48000,
+          bitRate: 96000,
+          numChannels: 1,
+        );
+        print('[REC][Android] started -> $filePath');
       }
 
-      // 2) Open recorder right before use
-      if (!_rec.isRecording && !_rec.isPaused) {
-        await _rec.openRecorder();
-        print('[REC] recorder opened');
-      }
-
-      // 3) Build a file path
-      final dir = await getApplicationDocumentsDirectory();
-      final filePath =
-          '${dir.path}/idea_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-      // 4) Start recording (AAC in MP4, 48kHz mono)
-      await _rec.startRecorder(
-        toFile: filePath,
-        codec: Codec.aacMP4,
-        sampleRate: 48000,
-        bitRate: 96000,
-        numChannels: 1,
-      );
-      print('[REC] started -> $filePath');
-
+      // Common UI state (both iOS & Android)
       setState(() {
         _recording = true;
         _startedAt = DateTime.now();
@@ -114,14 +124,24 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _stop() async {
     try {
       print('[REC] stop tapped');
-      final path = await _rec.stopRecorder(); // String? path
-      await _rec.closeRecorder();
+      String? path;
+
+      if (Platform.isIOS) {
+        // iOS native returns absolute path (or empty on failure)
+        path = await stopNativeRecord();
+        print('[REC][iOS] stopped -> $path');
+      } else {
+        // Android/others
+        path = await _rec.stopRecorder();
+        await _rec.closeRecorder();
+        print('[REC][Android] stopped -> $path');
+      }
 
       _timer?.cancel();
       setState(() => _recording = false);
 
-      if (path == null) {
-        print('[REC] stop returned null path');
+      if (path == null || path.isEmpty) {
+        print('[REC] stop returned null/empty path');
         return;
       }
 
@@ -132,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         id: const Uuid().v4(),
         title:
         'Idea ${DateTime.now().toLocal().toIso8601String().substring(0, 16)}',
-        filePath: path, // iOS: absolute path
+        filePath: path,
         duration: duration,
         createdAt: DateTime.now(),
       );
