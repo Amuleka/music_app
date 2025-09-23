@@ -10,6 +10,30 @@ import '../models/idea.dart';
 import '../main.dart';
 import '../widgets/animated_bg.dart';
 
+/// Ask for mic permission safely. If previously denied permanently, opens Settings.
+Future<bool> ensureMicPermission(BuildContext context) async {
+  var status = await Permission.microphone.status;
+
+  // If user denied before with "Don't ask again", send them to Settings
+  if (status.isPermanentlyDenied) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Enable Microphone in Settings to record')),
+    );
+    await openAppSettings();
+    return false;
+  }
+
+  // Request now if not granted
+  status = await Permission.microphone.request();
+  if (!status.isGranted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Microphone permission required')),
+    );
+    return false;
+  }
+  return true;
+}
+
 class HomeScreen extends StatefulWidget {
   final void Function(Idea) onIdeaSaved;
   const HomeScreen({super.key, required this.onIdeaSaved});
@@ -41,10 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       print('[REC] start tapped');
 
-      // 1) Request mic permission just-in-time
-      final mic = await Permission.microphone.request();
-      if (!mic.isGranted) {
-        _toast('Microphone permission required');
+      // 1) Ask for mic permission via helper
+      final ok = await ensureMicPermission(context);
+      if (!ok) {
         print('[REC] mic permission not granted');
         return;
       }
