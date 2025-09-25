@@ -18,6 +18,7 @@
 		AF8E87A968628A198C6E48A7 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0D3BFC8452339525834CCA0 /* Pods_Runner.framework */; };
 		C7A448932E82306300621039 /* IdeaRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A448922E82305500621039 /* IdeaRecorder.swift */; };
 		C7A448952E8230B500621039 /* NativeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A448942E8230AB00621039 /* NativeBridge.swift */; };
+		C7A448972E85012A00621039 /* NativeMidiBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A448962E85012000621039 /* NativeMidiBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,6 +69,7 @@
 		A0D3BFC8452339525834CCA0 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C7A448922E82305500621039 /* IdeaRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeaRecorder.swift; sourceTree = "<group>"; };
 		C7A448942E8230AB00621039 /* NativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridge.swift; sourceTree = "<group>"; };
+		C7A448962E85012000621039 /* NativeMidiBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMidiBridge.swift; sourceTree = "<group>"; };
 		FC9626621DDC830F574238A4 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -156,6 +158,7 @@
 		97C146F01CF9000F007C117D /* Runner */ = {
 			isa = PBXGroup;
 			children = (
+				C7A448962E85012000621039 /* NativeMidiBridge.swift */,
 				C7A448942E8230AB00621039 /* NativeBridge.swift */,
 				C7A448922E82305500621039 /* IdeaRecorder.swift */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
@@ -400,6 +403,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C7A448972E85012A00621039 /* NativeMidiBridge.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				C7A448952E8230B500621039 /* NativeBridge.swift in Sources */,
 				C7A448932E82306300621039 /* IdeaRecorder.swift in Sources */,
