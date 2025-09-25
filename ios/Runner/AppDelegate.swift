@@ -12,6 +12,9 @@ import Flutter
 
     let controller = window?.rootViewController as! FlutterViewController
     NativeBridge.setupChannels(controller)
+      
+    // Register the MIDI channel
+    NativeMidiBridge.register(with: controller)
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
